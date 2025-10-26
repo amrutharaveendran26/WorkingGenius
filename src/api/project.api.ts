@@ -1,9 +1,10 @@
 import apiClient from './apiClient';
 import { projectEndpoints } from './endpoints';
+import { ApiResponse, GetAllProjectsResponse } from './types';
 
-export const getAllProjects = async () => {
-  const { data } = await apiClient.get(projectEndpoints.getAll);
-  return data;
+export const getAllProjects = async (): Promise<GetAllProjectsResponse> => {
+  const response = await apiClient.get<GetAllProjectsResponse>(projectEndpoints.getAll);
+  return response.data;
 };
 
 export const getProjectById = async (id: number) => {
@@ -11,14 +12,14 @@ export const getProjectById = async (id: number) => {
   return data;
 };
 
-export const createProject = async (payload: any) => {
-  const { data } = await apiClient.post(projectEndpoints.create, payload);
-  return data;
+export const createProject = async (data: any): Promise<ApiResponse> => {
+  const response = await apiClient.post<ApiResponse>(projectEndpoints.create, data);
+  return response.data;
 };
 
-export const updateProject = async (id: number, payload: any) => {
-  const { data } = await apiClient.put(projectEndpoints.update(id), payload);
-  return data;
+export const updateProject = async (id: number, data: any): Promise<ApiResponse> => {
+  const response = await apiClient.put<ApiResponse>(projectEndpoints.update(id), data);
+  return response.data;
 };
 
 export const deleteProject = async (id: number) => {

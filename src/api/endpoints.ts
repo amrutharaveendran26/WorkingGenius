@@ -10,3 +10,8 @@ export const projectEndpoints = {
 export const taskEndpoints = {
   delete: (id: number) => `/tasks/${id}`,
 };
+
+export const masterEndpoints = {
+  getMasterData: (type: string) => `/master?type=${type}`,
+};
+

@@ -36,59 +36,28 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { Board, Employee, ProjectPriority, ProjectStatus, Task } from '@/api/types';
 
 interface SubTask {
-  id: number;
+  id: any;
   title: string;
   owner: string;
   dueDate: string;
   completed: boolean;
 }
 
-interface Comment {
-  id: number;
-  author: string;
-  content: string;
-  timestamp: string;
-  avatar?: string;
-}
-
-interface Task {
-  id: number;
-  title: string;
-  description: string;
-  assignee: string;
-  dueDate: string;
-  comments: number;
-  attachments: number;
-  priority: string;
-  status: string;
-  column: string;
-  completed: boolean;
-  progress?: number;
-  progressEnabled?: boolean;
-  budgetEnabled?: boolean;
-  targetBudget?: number;
-  actualBudget?: number;
-  rangeEnabled?: boolean;
-  minValue?: number;
-  maxValue?: number;
-  unitOfMeasure?: string;
-  owners?: string[];
-  customFields?: { name: string; value: string }[];
-  subtasks?: SubTask[];
-  commentsArray?: Comment[];
-  boards?: string[];
-}
-
 interface CardDetailModalProps {
   task: Task | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (task: Task) => void;
+  onSave: (task: Task, isFinalSave?: boolean) => void;
   onDuplicate: (task: Task) => void;
   onDelete: (taskId: number) => void;
   isNewCard?: boolean;
+  statuses: ProjectStatus[];
+  priorities: ProjectPriority[];
+  boardsData: Board[];
+  employees: Employee[];
 }
 
 export function CardDetailModal({
@@ -99,6 +68,10 @@ export function CardDetailModal({
   onDuplicate,
   onDelete,
   isNewCard = false,
+  statuses,
+  priorities,
+  boardsData,
+  employees,
 }: CardDetailModalProps) {
   const [editedTask, setEditedTask] = useState<Task | null>(null);
   const [newComment, setNewComment] = useState('');
@@ -112,36 +85,28 @@ export function CardDetailModal({
   const [newSubtaskDate, setNewSubtaskDate] = useState<Date>();
   const [isLocked, setIsLocked] = useState(false);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
-
-  const availableBoards = [
-    'All Projects',
-    'Marketing Team Meetings',
-    'Social Media',
-    'Product Development',
-    'Customer Support',
-  ];
+  const availableBoards = boardsData.map((b) => b.name);
 
   useEffect(() => {
     if (task) {
       setEditedTask({
         ...task,
         owners: task.owners || [task.assignee],
-        customFields: task.customFields || [],
         subtasks: task.subtasks || [],
         progress: task.progress || 0,
         progressEnabled: task.progressEnabled ?? false,
-        boards: task.boards || ['Marketing Team Meetings'],
-        commentsArray: task.commentsArray || [
-          {
-            id: 1,
-            author: 'You',
-            content: 'Great progress on this task! The initial research looks comprehensive.',
-            timestamp: '2 hours ago',
-            avatar: '/professional-profile.png',
-          },
-        ],
+        boards: task.boards,
       });
-      setSelectedDate(new Date(task.dueDate + ', 2024'));
+      if (task.dueDate) {
+        const parsedDate = new Date(task.dueDate);
+        if (!isNaN(parsedDate.getTime())) {
+          setSelectedDate(parsedDate);
+        } else {
+          setSelectedDate(undefined);
+        }
+      } else {
+        setSelectedDate(undefined);
+      }
 
       if (isNewCard) {
         setEditingTitle(true);
@@ -171,6 +136,15 @@ export function CardDetailModal({
     }
   };
 
+  // Helper to always format as "YYYY-MM-DD"
+  const formatDate = (dateValue?: Date): string => {
+    if (!dateValue) return new Date().toISOString().split('T')[0];
+    const year = dateValue.getFullYear();
+    const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+    const day = String(dateValue.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const handleDelete = () => {
     if (
       editedTask &&
@@ -196,10 +170,6 @@ export function CardDetailModal({
     if (newFieldName && newFieldValue && editedTask) {
       setEditedTask({
         ...editedTask,
-        customFields: [
-          ...(editedTask.customFields || []),
-          { name: newFieldName, value: newFieldValue },
-        ],
       });
       setNewFieldName('');
       setNewFieldValue('');
@@ -210,7 +180,6 @@ export function CardDetailModal({
     if (editedTask) {
       setEditedTask({
         ...editedTask,
-        customFields: editedTask.customFields?.filter((_, i) => i !== index) || [],
       });
     }
   };
@@ -231,7 +200,7 @@ export function CardDetailModal({
   const addSubtask = () => {
     if (newSubtaskTitle && newSubtaskOwner && editedTask) {
       const newSubtask: SubTask = {
-        id: Date.now(),
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now(),
         title: newSubtaskTitle,
         owner: newSubtaskOwner,
         dueDate: newSubtaskDate ? format(newSubtaskDate, 'MMM dd') : 'No date',
@@ -241,8 +210,8 @@ export function CardDetailModal({
         ...editedTask,
         subtasks: [...(editedTask.subtasks || []), newSubtask],
       };
-      setEditedTask(updatedTask);
-      onSave(updatedTask);
+      // setEditedTask(updatedTask);
+      // onSave(updatedTask);
       setNewSubtaskTitle('');
       setNewSubtaskOwner('');
       setNewSubtaskDate(undefined);
@@ -274,29 +243,6 @@ export function CardDetailModal({
     }
   };
 
-  const addComment = () => {
-    if (newComment.trim() && editedTask) {
-      const newCommentObj: Comment = {
-        id: Date.now(),
-        author: 'You',
-        content: newComment.trim(),
-        timestamp: 'Just now',
-        avatar: '/professional-profile.png',
-      };
-
-      const updatedCommentsArray = [...(editedTask.commentsArray || []), newCommentObj];
-
-      const updatedTask = {
-        ...editedTask,
-        comments: updatedCommentsArray.length,
-        commentsArray: updatedCommentsArray,
-      };
-      setEditedTask(updatedTask);
-      onSave(updatedTask);
-      setNewComment('');
-    }
-  };
-
   const toggleBoard = (boardName: string) => {
     if (!editedTask || isLocked) return;
 
@@ -325,6 +271,7 @@ export function CardDetailModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[75vw] w-[75vw] max-h-[90vh] overflow-y-auto sm:max-w-[75vw]">
+        <DialogTitle className="sr-only">Task Details</DialogTitle>
         <div className={editedTask.completed ? 'opacity-60 grayscale' : ''}>
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -372,63 +319,81 @@ export function CardDetailModal({
                 )}
               </div>
             </div>
-            <div className="flex justify-start mt-2">
+            <div className="flex justify-between mt-2 items-center">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleComplete}
+                  className={
+                    editedTask.completed
+                      ? 'bg-gray-400 hover:bg-gray-500 text-white border-gray-400'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
+                  }
+                  disabled={isLocked}
+                >
+                  {editedTask.completed ? (
+                    <Check className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Square className="h-4 w-4 mr-2" />
+                  )}
+                  {editedTask.completed ? 'Mark Incomplete' : 'Complete'}
+                </Button>
+                <Button
+                  variant={editedTask.progressEnabled ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() =>
+                    setEditedTask({ ...editedTask, progressEnabled: !editedTask.progressEnabled })
+                  }
+                  className="ml-2 p-2"
+                  disabled={isLocked}
+                >
+                  <Percent className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={isLocked ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setIsLocked(!isLocked)}
+                  className="ml-2 p-2"
+                >
+                  {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDuplicate}
+                  className="ml-2 bg-transparent"
+                  disabled={isLocked}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Duplicate
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDelete}
+                  className="ml-2 bg-red-600 hover:bg-red-700 text-white"
+                  disabled={isLocked}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              </div>
+
+              {/* ✅ New Save Project Button */}
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
-                onClick={handleComplete}
-                className={
-                  editedTask.completed
-                    ? 'bg-gray-400 hover:bg-gray-500 text-white border-gray-400'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
-                }
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => {
+                  if (editedTask) {
+                    onSave(editedTask, true);
+                  }
+                }}
                 disabled={isLocked}
               >
-                {editedTask.completed ? (
-                  <Check className="h-4 w-4 mr-2" />
-                ) : (
-                  <Square className="h-4 w-4 mr-2" />
-                )}
-                {editedTask.completed ? 'Mark Incomplete' : 'Complete'}
-              </Button>
-              <Button
-                variant={editedTask.progressEnabled ? 'default' : 'outline'}
-                size="sm"
-                onClick={() =>
-                  setEditedTask({ ...editedTask, progressEnabled: !editedTask.progressEnabled })
-                }
-                className="ml-2 p-2"
-                disabled={isLocked}
-              >
-                <Percent className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={isLocked ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setIsLocked(!isLocked)}
-                className="ml-2 p-2"
-              >
-                {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDuplicate}
-                className="ml-2 bg-transparent"
-                disabled={isLocked}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Duplicate
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDelete}
-                className="ml-2 bg-red-600 hover:bg-red-700 text-white"
-                disabled={isLocked}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Delete
+                <Send className="h-4 w-4 mr-2" />
+                Save Project
               </Button>
             </div>
           </DialogHeader>
@@ -576,7 +541,7 @@ export function CardDetailModal({
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
                         <div className="flex items-center gap-1">
-                          <Avatar className="h-4 w-4">
+                          {/* <Avatar className="h-4 w-4">
                             <AvatarFallback className="text-xs">
                               {subtask.owner
                                 .split(' ')
@@ -584,7 +549,7 @@ export function CardDetailModal({
                                 .join('')}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="text-xs text-muted-foreground">{subtask.owner}</span>
+                          <span className="text-xs text-muted-foreground">{subtask.owner}</span> */}
                         </div>
                         <div className="flex items-center gap-1">
                           <CalendarIcon className="h-3 w-3 text-muted-foreground" />
@@ -639,21 +604,17 @@ export function CardDetailModal({
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-48 p-2" align="center">
-                          <Select
-                            value={newSubtaskOwner}
-                            onValueChange={setNewSubtaskOwner}
-                            disabled={isLocked}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select owner" />
-                            </SelectTrigger>
-                            <SelectContent>
+                          <SelectContent>
+                            {employees && employees.length > 0 ? (
+                              employees.map((emp) => (
+                                <SelectItem key={emp.id} value={emp.name}>
+                                  {emp.name}
+                                </SelectItem>
+                              ))
+                            ) : (
                               <SelectItem value="You">You</SelectItem>
-                              <SelectItem value="Sarah Chen">Sarah Chen</SelectItem>
-                              <SelectItem value="Mike Johnson">Mike Johnson</SelectItem>
-                              <SelectItem value="Alex Rivera">Alex Rivera</SelectItem>
-                            </SelectContent>
-                          </Select>
+                            )}
+                          </SelectContent>
                         </PopoverContent>
                       </Popover>
                       <Popover>
@@ -704,7 +665,7 @@ export function CardDetailModal({
               </div>
 
               {/* Comments */}
-              <div>
+              {/* <div>
                 <h3 className="text-sm font-medium mb-3">
                   Comments ({editedTask.commentsArray?.length || 0})
                 </h3>
@@ -785,7 +746,7 @@ export function CardDetailModal({
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Attachments */}
               <div>
@@ -808,7 +769,7 @@ export function CardDetailModal({
                 </div>
               </div>
 
-              {/* Custom Fields */}
+              {/* Custom Fields
               <div>
                 <h3 className="text-sm font-medium mb-3">Custom Fields</h3>
                 <div className="space-y-3">
@@ -851,7 +812,7 @@ export function CardDetailModal({
                     </Button>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </div>
 
             {/* Sidebar */}
@@ -896,9 +857,11 @@ export function CardDetailModal({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
+                        {priorities?.map((p) => (
+                          <SelectItem key={p.id} value={p.name}>
+                            {p?.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -926,8 +889,13 @@ export function CardDetailModal({
                       <Calendar
                         mode="single"
                         selected={selectedDate}
-                        onSelect={setSelectedDate}
-                        initialFocus
+                        onSelect={(date) => {
+                          setSelectedDate(date || undefined);
+                          if (date && editedTask) {
+                            const formattedDate = formatDate(date);
+                            setEditedTask({ ...editedTask, dueDate: formattedDate });
+                          }
+                        }}
                         disabled={isLocked}
                       />
                     </PopoverContent>
@@ -955,15 +923,29 @@ export function CardDetailModal({
                       <span className="text-sm">{owner}</span>
                     </div>
                   ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full bg-transparent"
+                  <Select
+                    onValueChange={(value) => {
+                      if (editedTask) {
+                        setEditedTask({
+                          ...editedTask,
+                          owners: [...(editedTask.owners || []), value],
+                        });
+                      }
+                    }}
                     disabled={isLocked}
                   >
-                    <User className="h-4 w-4 mr-2" />
-                    Add Owner
-                  </Button>
+                    <SelectTrigger className="w-full">
+                      <User className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Add Owner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.name}>
+                          {emp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </CardContent>
               </Card>
 

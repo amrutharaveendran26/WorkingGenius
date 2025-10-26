@@ -1,11 +1,16 @@
-"use client"
+'use client';
 
-import type React from "react"
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Clock,
   MessageSquare,
@@ -18,598 +23,667 @@ import {
   GripHorizontal,
   FileText,
   Edit3,
-} from "lucide-react"
-import { useState, useRef, useCallback } from "react"
-import { CardDetailModal } from "./card-detail-modal"
+} from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { CardDetailModal } from './card-detail-modal';
+import { createProject, getAllProjects, updateProject } from '@/api/project.api';
+import {
+  ApiResponse,
+  Board,
+  Employee,
+  ProjectCategory,
+  ProjectPriority,
+  ProjectStatus,
+  Task,
+  Team,
+} from '@/api/types';
+import { fetchMasterData } from '@/api/master.api';
+import toast from 'react-hot-toast';
 
 interface KanbanBoardProps {
-  selectedBoard: string
+  selectedBoard: string;
 }
-
-const workingGeniusTypes = [
-  { id: "wonder", title: "Wonder", color: "bg-chart-1", description: "Pondering and questioning" },
-  { id: "invention", title: "Invention", color: "bg-chart-2", description: "Creating and brainstorming" },
-  { id: "discernment", title: "Discernment", color: "bg-chart-3", description: "Evaluating and critiquing" },
-  { id: "galvanizing", title: "Galvanizing", color: "bg-chart-4", description: "Rallying and inspiring" },
-  { id: "enablement", title: "Enablement", color: "bg-chart-5", description: "Supporting and assisting" },
-  { id: "tenacity", title: "Tenacity", color: "bg-primary", description: "Pushing to the finish" },
-]
 
 const stageTypes = [
   {
-    id: "ideation",
-    title: "Ideation",
-    color: "bg-chart-1",
-    description: "Wondering and inventing",
-    geniuses: ["wonder", "invention"],
+    id: 'ideation',
+    title: 'Ideation',
+    color: 'bg-chart-1',
+    description: 'Wondering and inventing',
+    geniuses: ['wonder', 'invention'],
   },
   {
-    id: "activation",
-    title: "Activation",
-    color: "bg-chart-3",
-    description: "Discerning and galvanizing",
-    geniuses: ["discernment", "galvanizing"],
+    id: 'activation',
+    title: 'Activation',
+    color: 'bg-chart-3',
+    description: 'Discerning and galvanizing',
+    geniuses: ['discernment', 'galvanizing'],
   },
   {
-    id: "implementation",
-    title: "Implementation",
-    color: "bg-chart-5",
-    description: "Enabling and persevering",
-    geniuses: ["enablement", "tenacity"],
+    id: 'implementation',
+    title: 'Implementation',
+    color: 'bg-chart-5',
+    description: 'Enabling and persevering',
+    geniuses: ['enablement', 'tenacity'],
   },
-]
-
-const sampleTasks = [
-  {
-    id: 1,
-    title: "Research user pain points",
-    description: "Conduct interviews to understand current workflow issues",
-    assignee: "Sarah Chen",
-    dueDate: "Dec 15",
-    comments: 1,
-    attachments: 2,
-    priority: "high",
-    status: "on-track",
-    column: "wonder",
-    completed: false,
-    progress: 75,
-    progressEnabled: true,
-    boards: ["Marketing Team Meetings", "Product Development"],
-    subtasks: [
-      { id: 1, title: "Interview stakeholders", owner: "Sarah Chen", dueDate: "Dec 10", completed: true },
-      { id: 2, title: "Analyze feedback", owner: "Mike Johnson", dueDate: "Dec 12", completed: false },
-    ],
-  },
-  {
-    id: 2,
-    title: "Design new dashboard layout",
-    description: "Create wireframes for improved user experience",
-    assignee: "Mike Johnson",
-    dueDate: "Dec 18",
-    comments: 0,
-    attachments: 1,
-    priority: "medium",
-    status: "at-risk",
-    column: "invention",
-    completed: false,
-    progress: 45,
-    progressEnabled: false,
-    boards: ["Social Media"],
-    subtasks: [],
-  },
-  {
-    id: 3,
-    title: "Review prototype feedback",
-    description: "Analyze user testing results and iterate on design",
-    assignee: "Alex Rivera",
-    dueDate: "Dec 20",
-    comments: 3,
-    attachments: 0,
-    priority: "high",
-    status: "blocked",
-    column: "discernment",
-    completed: false,
-    progress: 20,
-    progressEnabled: true,
-    boards: ["Marketing Team Meetings", "Social Media"],
-    subtasks: [
-      { id: 3, title: "Compile feedback", owner: "Alex Rivera", dueDate: "Dec 18", completed: true },
-      { id: 4, title: "Create action items", owner: "Sarah Chen", dueDate: "Dec 19", completed: false },
-    ],
-  },
-  {
-    id: 4,
-    title: "Implement authentication system",
-    description: "Set up secure login and user management",
-    assignee: "David Kim",
-    dueDate: "Dec 22",
-    comments: 2,
-    attachments: 1,
-    priority: "high",
-    status: "on-track",
-    column: "enablement",
-    completed: false,
-    progress: 60,
-    progressEnabled: true,
-    boards: ["Product Development"],
-    subtasks: [],
-  },
-  {
-    id: 5,
-    title: "Create marketing materials",
-    description: "Design brochures and digital assets for campaign",
-    assignee: "Emma Wilson",
-    dueDate: "Dec 25",
-    comments: 1,
-    attachments: 3,
-    priority: "medium",
-    status: "on-track",
-    column: "galvanizing",
-    completed: false,
-    progress: 30,
-    progressEnabled: false,
-    boards: ["Marketing Team Meetings"],
-    subtasks: [],
-  },
-  {
-    id: 6,
-    title: "Optimize database queries",
-    description: "Improve application performance and response times",
-    assignee: "Chris Taylor",
-    dueDate: "Dec 28",
-    comments: 0,
-    attachments: 0,
-    priority: "low",
-    status: "on-track",
-    column: "tenacity",
-    completed: true,
-    progress: 100,
-    progressEnabled: true,
-    boards: ["Product Development"],
-    subtasks: [],
-  },
-]
+];
 
 const teamMembers = [
   {
-    name: "Sarah Chen",
-    wonder: "genius",
-    invention: "competency",
-    discernment: "frustration",
-    galvanizing: "frustration",
-    enablement: "competency",
-    tenacity: "genius",
+    name: 'Sarah Chen',
+    wonder: 'genius',
+    invention: 'competency',
+    discernment: 'frustration',
+    galvanizing: 'frustration',
+    enablement: 'competency',
+    tenacity: 'genius',
   },
   {
-    name: "Mike Johnson",
-    wonder: "competency",
-    invention: "genius",
-    discernment: "genius",
-    galvanizing: "competency",
-    enablement: "frustration",
-    tenacity: "frustration",
+    name: 'Mike Johnson',
+    wonder: 'competency',
+    invention: 'genius',
+    discernment: 'genius',
+    galvanizing: 'competency',
+    enablement: 'frustration',
+    tenacity: 'frustration',
   },
   {
-    name: "Lisa Park",
-    wonder: "frustration",
-    invention: "frustration",
-    discernment: "competency",
-    galvanizing: "genius",
-    enablement: "genius",
-    tenacity: "competency",
+    name: 'Lisa Park',
+    wonder: 'frustration',
+    invention: 'frustration',
+    discernment: 'competency',
+    galvanizing: 'genius',
+    enablement: 'genius',
+    tenacity: 'competency',
   },
   {
-    name: "Alex Rodriguez",
-    wonder: "genius",
-    invention: "frustration",
-    discernment: "competency",
-    galvanizing: "competency",
-    enablement: "genius",
-    tenacity: "frustration",
+    name: 'Alex Rodriguez',
+    wonder: 'genius',
+    invention: 'frustration',
+    discernment: 'competency',
+    galvanizing: 'competency',
+    enablement: 'genius',
+    tenacity: 'frustration',
   },
   {
-    name: "Emma Wilson",
-    wonder: "competency",
-    invention: "genius",
-    discernment: "frustration",
-    galvanizing: "frustration",
-    enablement: "competency",
-    tenacity: "genius",
+    name: 'Emma Wilson',
+    wonder: 'competency',
+    invention: 'genius',
+    discernment: 'frustration',
+    galvanizing: 'frustration',
+    enablement: 'competency',
+    tenacity: 'genius',
   },
-]
+];
 
 export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
-  const [sortBy, setSortBy] = useState<string>("dueDate")
-  const [showCompleted, setShowCompleted] = useState<boolean>(false)
-  const [viewMode, setViewMode] = useState<"genius" | "stage">("genius")
-  const [tasks, setTasks] = useState(sampleTasks)
-  const [selectedTask, setSelectedTask] = useState<(typeof sampleTasks)[0] | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [hoveredColumn, setHoveredColumn] = useState<string | null>(null)
-  const [draggedTask, setDraggedTask] = useState<(typeof sampleTasks)[0] | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
-  const [kanbanHeight, setKanbanHeight] = useState(600)
-  const [isResizing, setIsResizing] = useState(false)
-  const [showDraftZone, setShowDraftZone] = useState(false)
-  const [showArchiveZone, setShowArchiveZone] = useState(false)
-  const [isDraftPanelOpen, setIsDraftPanelOpen] = useState(false)
-  const [isArchivePanelOpen, setIsArchivePanelOpen] = useState(false)
-  const [dragOverEdge, setDragOverEdge] = useState<"left" | "right" | null>(null)
-  const resizeRef = useRef<HTMLDivElement>(null)
+  const [sortBy, setSortBy] = useState<string>('dueDate');
+  const [showCompleted, setShowCompleted] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'genius' | 'stage'>('genius');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [hoveredColumn, setHoveredColumn] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [kanbanHeight, setKanbanHeight] = useState(600);
+  const [isResizing, setIsResizing] = useState(false);
+  const [showDraftZone, setShowDraftZone] = useState(false);
+  const [showArchiveZone, setShowArchiveZone] = useState(false);
+  const [isDraftPanelOpen, setIsDraftPanelOpen] = useState(false);
+  const [isArchivePanelOpen, setIsArchivePanelOpen] = useState(false);
+  const [dragOverEdge, setDragOverEdge] = useState<'left' | 'right' | null>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
+
+  //my api
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [boardsData, setBoardsData] = useState<Board[]>([]);
+  const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
+  const [priorities, setPriorities] = useState<ProjectPriority[]>([]);
+  const [categories, setCategories] = useState<ProjectCategory[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  useEffect(() => {
+    fetchAllProjects();
+    fetchAllMasterData();
+  }, []);
+
+  useEffect(() => {
+    if (projects.length > 0) {
+      setTasks(mapProjectsToTasks(projects));
+    }
+  }, [projects]);
+
+  const workingGeniusTypes = categories.map((cat, index) => ({
+    id: cat.name.toLowerCase(),
+    title: cat.name,
+    description: cat.description || '',
+    color: ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-primary'][
+      index % 6
+    ],
+  }));
+
+  const fetchAllProjects = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const resp = await getAllProjects();
+      const fetched = resp?.projects ?? [];
+      setProjects(fetched);
+    } catch (err: any) {
+      console.error('fetchProjects error:', err);
+      setError(err?.message ?? 'Failed to fetch projects');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAllMasterData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [teamsRes, employeesRes, boardsRes, statusRes, priorityRes, categoryRes] =
+        await Promise.all([
+          fetchMasterData<Team>('teams'),
+          fetchMasterData<Employee>('employees'),
+          fetchMasterData<Board>('boards'),
+          fetchMasterData<ProjectStatus>('status'),
+          fetchMasterData<ProjectPriority>('priority'),
+          fetchMasterData<ProjectCategory>('category'),
+        ]);
+
+      setTeams(teamsRes.data);
+      setEmployees(employeesRes.data);
+      setBoardsData(boardsRes.data);
+      setStatuses(statusRes.data);
+      setPriorities(priorityRes.data);
+      setCategories(categoryRes.data);
+    } catch (err: any) {
+      console.error('Error fetching master data:', err);
+      setError(err?.message ?? 'Failed to fetch master data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mapProjectsToTasks = (projects: any[]): Task[] =>
+    projects.map((proj, index) => ({
+      id: proj.id ?? index + 1,
+      title: proj.title ?? `Untitled Project ${index + 1}`,
+      description: proj.description ?? 'No description available.',
+      assignee: proj.owners?.[0]?.name || 'Unassigned',
+      dueDate: proj.dueDate
+        ? new Date(proj.dueDate).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })
+        : 'Dec 31',
+      comments: proj.comments ?? 1,
+      attachments: proj.attachments ?? 1,
+      priority: proj.priority ?? 'medium',
+      status: proj.status ?? 'on-track',
+      column: proj.category?.toLowerCase() || 'uncategorized',
+      completed: proj.completed ?? false,
+      progress: proj.progress ?? 70,
+      progressEnabled: proj.progressEnabled ?? true,
+
+      // 🧠 Fix here — convert project owners and boards to string arrays
+      owners: proj.owners?.map((o: any) => o.name) ?? [], // <-- fixed
+      boards: proj.boards?.map((b: any) => b.name) ?? [], // <-- fixed
+
+      // 🧩 subtasks should match your interface shape
+      subtasks:
+        proj.subtasks?.map((sub: any, subIndex: number) => ({
+          id: sub.id ?? subIndex + 1,
+          title: sub.title ?? 'Untitled subtask',
+          assignee: sub.assignee ?? 'Unassigned',
+          dueDate: sub.dueDate
+            ? new Date(sub.dueDate).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              })
+            : 'Dec 31',
+          completed: sub.completed ?? false,
+        })) ?? [],
+    }));
+
+  const handleSaveProject = async (task: Task) => {
+    try {
+      console.log("inside try ")
+      const isNew = !task.id || task.title === 'New Task';
+
+      const payload = {
+        title: task.title || 'Untitled Project',
+        description: task.description || '',
+        categoryId: categories.find((c) => c.name.toLowerCase() === task.column)?.id ?? 1,
+        teamId: teams[0]?.id ?? 1,
+        statusId: statuses.find((s) => s.name.toLowerCase() === task.status.toLowerCase())?.id ?? 1,
+        priorityId:
+          priorities.find((p) => p.name.toLowerCase() === task.priority.toLowerCase())?.id ?? 1,
+        owners: (task.owners || []).map((o) => {
+          const found = employees.find((e) => e.name === o);
+          return found?.id ?? employees[0]?.id ?? 1;
+        }),
+        boards: (task.boards || []).map((b) => {
+          const found = boardsData.find((board) => board.name === b);
+          return found?.id ?? boardsData[0]?.id ?? 1;
+        }),
+        dueDate: task.dueDate || '',
+        tasks: (task.subtasks || []).map((t) => ({
+          title: t.title,
+          dueDate: t.dueDate || new Date().toISOString().split('T')[0],
+          assignedTo: employees.find((e) => e.name === t.assignee)?.id ?? employees[0]?.id ?? 1,
+        })),
+      };
+
+      console.log('🟡 Sending Payload to updateProject:', JSON.stringify(payload, null, 2));
+
+      const response: ApiResponse = isNew
+        ? await createProject(payload)
+        : await updateProject(task.id, payload);
+
+      if (response.success) {
+        toast.success(isNew ? 'Project created successfully!' : 'Project updated successfully!');
+        await fetchAllProjects();
+        setIsModalOpen(false);
+      } else {
+        toast.error(response.message || 'Failed to save project');
+      }
+    } catch (error) {
+      console.error('❌ Error saving project:', error);
+      toast.error('Something went wrong while saving project');
+    }
+  };
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsResizing(true)
+    e.preventDefault();
+    setIsResizing(true);
 
     const handleMouseMove = (e: MouseEvent) => {
       if (resizeRef.current) {
-        const rect = resizeRef.current.getBoundingClientRect()
-        const newHeight = Math.max(400, Math.min(1200, e.clientY - rect.top))
-        setKanbanHeight(newHeight)
+        const rect = resizeRef.current.getBoundingClientRect();
+        const newHeight = Math.max(400, Math.min(1200, e.clientY - rect.top));
+        setKanbanHeight(newHeight);
       }
-    }
+    };
 
     const handleMouseUp = () => {
-      setIsResizing(false)
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
-    }
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
 
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-  }, [])
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, []);
 
-  const sortTasks = (tasks: typeof sampleTasks) => {
+  const sortTasks = (tasks: Task[]): Task[] => {
     return [...tasks].sort((a, b) => {
       switch (sortBy) {
-        case "title":
-          return a.title.localeCompare(b.title)
-        case "dueDate":
-          return new Date(a.dueDate + ", 2024").getTime() - new Date(b.dueDate + ", 2024").getTime()
-        case "priority":
-          const priorityOrder = { high: 3, medium: 2, low: 1 }
+        case 'title':
+          return a.title.localeCompare(b.title);
+        case 'dueDate':
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        case 'priority':
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
           return (
             priorityOrder[b.priority as keyof typeof priorityOrder] -
             priorityOrder[a.priority as keyof typeof priorityOrder]
-          )
-        case "status":
-          const statusOrder = { blocked: 3, "at-risk": 2, "on-track": 1 }
-          return statusOrder[b.status as keyof typeof statusOrder] - statusOrder[a.status as keyof typeof statusOrder]
+          );
+        case 'status':
+          const statusOrder = { blocked: 3, 'at-risk': 2, 'on-track': 1 };
+          return (
+            statusOrder[b.status as keyof typeof statusOrder] -
+            statusOrder[a.status as keyof typeof statusOrder]
+          );
         default:
-          return 0
+          return 0;
       }
-    })
-  }
+    });
+  };
 
-  const filterTasksByBoard = (tasks: typeof sampleTasks) => {
-    if (selectedBoard === "All Projects") {
-      return tasks
+  const filterTasksByBoard = (tasks: Task[]): Task[] => {
+    if (selectedBoard === 'All Projects') {
+      return tasks;
     }
-    return tasks.filter((task) => task.boards?.includes(selectedBoard))
-  }
+    return tasks.filter((task) => task.boards?.includes(selectedBoard));
+  };
 
-  const filterTasks = (tasks: typeof sampleTasks) => {
-    const boardFiltered = filterTasksByBoard(tasks)
-    return showCompleted ? boardFiltered : boardFiltered.filter((task) => !task.completed)
-  }
+  const filterTasks = (tasks: Task[]): Task[] => {
+    const boardFiltered = filterTasksByBoard(tasks);
+    return showCompleted ? boardFiltered : boardFiltered.filter((task) => !task.completed);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "on-track":
-        return "bg-green-500"
-      case "at-risk":
-        return "bg-yellow-500"
-      case "blocked":
-        return "bg-red-500"
+      case 'on-track':
+        return 'bg-green-500';
+      case 'at-risk':
+        return 'bg-yellow-500';
+      case 'blocked':
+        return 'bg-red-500';
       default:
-        return "bg-gray-400"
+        return 'bg-gray-400';
     }
-  }
+  };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case "on-track":
-        return "On Track"
-      case "at-risk":
-        return "At Risk"
-      case "blocked":
-        return "Blocked"
+      case 'on-track':
+        return 'On Track';
+      case 'at-risk':
+        return 'At Risk';
+      case 'blocked':
+        return 'Blocked';
       default:
-        return "Unknown"
+        return 'Unknown';
     }
-  }
+  };
 
-  const handleCardClick = (task: (typeof sampleTasks)[0]) => {
-    setSelectedTask(task)
-    setIsModalOpen(true)
-  }
+  const handleCardClick = (task: Task) => {
+    setSelectedTask(task);
+    setIsModalOpen(true);
+  };
 
-  const handleSaveTask = (updatedTask: (typeof sampleTasks)[0]) => {
-    setTasks(tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)))
-  }
+  const handleSaveTask = async (updatedTask: Task, isFinalSave = false) => {
+    setTasks(tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)));
 
-  const handleDuplicateTask = (taskToDuplicate: (typeof sampleTasks)[0]) => {
-    setTasks([...tasks, taskToDuplicate])
-  }
+    if (isFinalSave) {
+      await handleSaveProject(updatedTask);
+    }
+  };
+
+  const handleDuplicateTask = (taskToDuplicate: Task) => {
+    setTasks([...tasks, taskToDuplicate]);
+  };
 
   const handleDeleteTask = (taskId: number) => {
-    setTasks(tasks.filter((task) => task.id !== taskId))
-  }
+    setTasks(tasks.filter((task) => task.id !== taskId));
+  };
 
   const handleCreateCard = (columnId: string) => {
-    let assignedColumn = columnId
-    if (viewMode === "stage") {
-      const stage = stageTypes.find((s) => s.id === columnId)
-      assignedColumn = stage?.geniuses[0] || columnId
+    let assignedColumn = columnId;
+    if (viewMode === 'stage') {
+      const stage = stageTypes.find((s) => s.id === columnId);
+      assignedColumn = stage?.geniuses[0] || columnId;
     }
 
-    const newTask = {
-      id: Math.max(...tasks.map((t) => t.id)) + 1,
-      title: "New Task",
-      description: "Add description...",
-      assignee: "You",
-      dueDate: "Dec 31",
+    const newTask: Task = {
+      id: Math.max(0, ...tasks.map((t) => t.id)) + 1,
+      title: 'New Task',
+      description: 'Add description...',
+      assignee: 'You',
+      dueDate: 'Dec 31',
       comments: 0,
       attachments: 0,
-      priority: "medium" as const,
-      status: "on-track" as const,
+      priority: 'medium',
+      status: 'on-track',
       column: assignedColumn,
       completed: false,
       progress: 0,
-      progressEnabled: false,
-      boards: selectedBoard === "All Projects" ? ["Marketing Team Meetings"] : [selectedBoard],
+      progressEnabled: true,
+      boards: selectedBoard === 'All Projects' ? ['Marketing Team Meetings'] : [selectedBoard],
       subtasks: [],
-    }
-    setTasks([...tasks, newTask])
-    setSelectedTask(newTask)
-    setIsModalOpen(true)
-  }
+      owners:[]
+    };
 
-  const handleDragStart = (e: React.DragEvent, task: (typeof sampleTasks)[0]) => {
-    setDraggedTask(task)
-    e.dataTransfer.effectAllowed = "move"
-  }
+    setTasks([...tasks, newTask]);
+    setSelectedTask(newTask);
+    setIsModalOpen(true);
+  };
+
+  const handleDragStart = (e: React.DragEvent, task: Task) => {
+    setDraggedTask(task);
+    e.dataTransfer.effectAllowed = 'move';
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-  }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
 
   const handleColumnDragOver = (e: React.DragEvent, columnId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragOverColumn(columnId)
-  }
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverColumn(columnId);
+  };
 
   const handleColumnDragLeave = (e: React.DragEvent, columnId: string) => {
-    e.preventDefault()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const x = e.clientX
-    const y = e.clientY
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
     if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      setDragOverColumn(null)
-      setDragOverIndex(null)
+      setDragOverColumn(null);
+      setDragOverIndex(null);
     }
-  }
+  };
 
   const handleCardDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const threshold = rect.top + rect.height * 0.8
-    const dropIndex = e.clientY < threshold ? index : index + 1
-    setDragOverIndex(dropIndex)
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const threshold = rect.top + rect.height * 0.8;
+    const dropIndex = e.clientY < threshold ? index : index + 1;
+    setDragOverIndex(dropIndex);
 
     // Ensure we maintain the column drag over state
-    const columnElement = (e.currentTarget as HTMLElement).closest("[data-column-id]")
+    const columnElement = (e.currentTarget as HTMLElement).closest('[data-column-id]');
     if (columnElement) {
-      const columnId = columnElement.getAttribute("data-column-id")
+      const columnId = columnElement.getAttribute('data-column-id');
       if (columnId) {
-        setDragOverColumn(columnId)
+        setDragOverColumn(columnId);
       }
     }
-  }
+  };
 
   const handleCardDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const x = e.clientX
-    const y = e.clientY
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
     if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      setDragOverIndex(null)
+      setDragOverIndex(null);
     }
-  }
+  };
 
   const handleDrop = (e: React.DragEvent, targetColumnId: string, dropIndex?: number) => {
-    e.preventDefault()
-    if (!draggedTask) return
+    e.preventDefault();
+    if (!draggedTask) return;
 
-    let newColumn = targetColumnId
-    if (viewMode === "stage") {
-      const stage = stageTypes.find((s) => s.id === targetColumnId)
-      newColumn = stage?.geniuses[0] || targetColumnId
+    let newColumn = targetColumnId;
+    if (viewMode === 'stage') {
+      const stage = stageTypes.find((s) => s.id === targetColumnId);
+      newColumn = stage?.geniuses[0] || targetColumnId;
     }
 
     if (draggedTask.column !== newColumn || dropIndex !== undefined) {
-      let updatedTasks = [...tasks]
-      updatedTasks = updatedTasks.filter((task) => task.id !== draggedTask.id)
-      const updatedTask = { ...draggedTask, column: newColumn }
+      let updatedTasks = [...tasks];
+      updatedTasks = updatedTasks.filter((task) => task.id !== draggedTask.id);
+      const updatedTask = { ...draggedTask, column: newColumn };
 
       if (dropIndex !== undefined) {
-        const columnTasks = updatedTasks.filter((task) => task.column === newColumn)
-        const insertIndex = Math.min(dropIndex, columnTasks.length)
+        const columnTasks = updatedTasks.filter((task) => task.column === newColumn);
+        const insertIndex = Math.min(dropIndex, columnTasks.length);
 
-        let actualIndex = 0
-        let columnTaskCount = 0
+        let actualIndex = 0;
+        let columnTaskCount = 0;
         for (let i = 0; i < updatedTasks.length; i++) {
           if (updatedTasks[i].column === newColumn) {
             if (columnTaskCount === insertIndex) {
-              actualIndex = i
-              break
+              actualIndex = i;
+              break;
             }
-            columnTaskCount++
+            columnTaskCount++;
           }
           if (i === updatedTasks.length - 1) {
-            actualIndex = updatedTasks.length
+            actualIndex = updatedTasks.length;
           }
         }
 
-        updatedTasks.splice(actualIndex, 0, updatedTask)
+        updatedTasks.splice(actualIndex, 0, updatedTask);
       } else {
-        updatedTasks.push(updatedTask)
+        updatedTasks.push(updatedTask);
       }
 
-      setTasks(updatedTasks)
+      setTasks(updatedTasks);
     }
 
-    setDraggedTask(null)
-    setDragOverIndex(null)
-    setDragOverColumn(null)
-  }
+    setDraggedTask(null);
+    setDragOverIndex(null);
+    setDragOverColumn(null);
+  };
 
   const handleDragEnd = () => {
-    setDraggedTask(null)
-    setDragOverIndex(null)
-    setDragOverColumn(null)
-  }
+    setDraggedTask(null);
+    setDragOverIndex(null);
+    setDragOverColumn(null);
+  };
 
   const getTasksForStage = (stageGeniuses: string[]) => {
-    return tasks.filter((task) => stageGeniuses.includes(task.column))
-  }
+    return tasks.filter((task) => stageGeniuses.includes(task.column));
+  };
 
-  const handleDragOverEdge = (e: React.DragEvent, edge: "left" | "right") => {
-    e.preventDefault()
+  const handleDragOverEdge = (e: React.DragEvent, edge: 'left' | 'right') => {
+    e.preventDefault();
     if (draggedTask) {
-      setDragOverEdge(edge)
-      if (edge === "left") {
-        setShowDraftZone(true)
+      setDragOverEdge(edge);
+      if (edge === 'left') {
+        setShowDraftZone(true);
       } else {
-        setShowArchiveZone(true)
+        setShowArchiveZone(true);
       }
     }
-  }
+  };
 
   const handleDragLeaveEdge = () => {
-    setDragOverEdge(null)
-    setShowDraftZone(false)
-    setShowArchiveZone(false)
-  }
+    setDragOverEdge(null);
+    setShowDraftZone(false);
+    setShowArchiveZone(false);
+  };
 
   const handleDropToDraft = (e: React.DragEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (draggedTask) {
-      const updatedTask = { ...draggedTask, column: "draft" }
-      setTasks(tasks.map((task) => (task.id === draggedTask.id ? updatedTask : task)))
-      setDraggedTask(null)
-      setShowDraftZone(false)
-      setDragOverEdge(null)
+      const updatedTask = { ...draggedTask, column: 'draft' };
+      setTasks(tasks.map((task) => (task.id === draggedTask.id ? updatedTask : task)));
+      setDraggedTask(null);
+      setShowDraftZone(false);
+      setDragOverEdge(null);
     }
-  }
+  };
 
   const handleDropToArchive = (e: React.DragEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (draggedTask) {
-      const updatedTask = { ...draggedTask, column: "archive" }
-      setTasks(tasks.map((task) => (task.id === draggedTask.id ? updatedTask : task)))
-      setDraggedTask(null)
-      setShowArchiveZone(false)
-      setDragOverEdge(null)
+      const updatedTask = { ...draggedTask, column: 'archive' };
+      setTasks(tasks.map((task) => (task.id === draggedTask.id ? updatedTask : task)));
+      setDraggedTask(null);
+      setShowArchiveZone(false);
+      setDragOverEdge(null);
     }
-  }
+  };
 
-  const getDraftTasks = () => tasks.filter((task) => task.column === "draft")
-  const getArchiveTasks = () => tasks.filter((task) => task.column === "archive")
+  const getDraftTasks = () => tasks.filter((task) => task.column === 'draft');
+  const getArchiveTasks = () => tasks.filter((task) => task.column === 'archive');
 
   const restoreFromDraft = (taskId: number) => {
-    const task = tasks.find((t) => t.id === taskId)
+    const task = tasks.find((t) => t.id === taskId);
     if (task) {
-      const updatedTask = { ...task, column: "wonder" }
-      setTasks(tasks.map((t) => (t.id === taskId ? updatedTask : t)))
+      const updatedTask = { ...task, column: 'wonder' };
+      setTasks(tasks.map((t) => (t.id === taskId ? updatedTask : t)));
     }
-  }
+  };
 
   const restoreFromArchive = (taskId: number) => {
-    const task = tasks.find((t) => t.id === taskId)
+    const task = tasks.find((t) => t.id === taskId);
     if (task) {
-      const updatedTask = { ...task, column: "wonder" }
-      setTasks(tasks.map((t) => (t.id === taskId ? updatedTask : t)))
+      const updatedTask = { ...task, column: 'wonder' };
+      setTasks(tasks.map((t) => (t.id === taskId ? updatedTask : t)));
     }
-  }
+  };
 
-  const displayColumns = viewMode === "genius" ? workingGeniusTypes : stageTypes
+  const displayColumns = viewMode === 'genius' ? workingGeniusTypes : stageTypes;
 
   const userGeniusResults = {
-    wonder: "frustration",
-    invention: "genius",
-    discernment: "competency",
-    galvanizing: "genius",
-    enablement: "frustration",
-    tenacity: "competency",
-  }
+    wonder: 'frustration',
+    invention: 'genius',
+    discernment: 'competency',
+    galvanizing: 'genius',
+    enablement: 'frustration',
+    tenacity: 'competency',
+  };
 
   const getGeniusResultStyle = (geniusId: string) => {
-    const result = userGeniusResults[geniusId as keyof typeof userGeniusResults]
+    const result = userGeniusResults[geniusId as keyof typeof userGeniusResults];
     switch (result) {
-      case "genius":
-        return "bg-green-50 border border-green-200"
-      case "frustration":
-        return "bg-red-50 border border-red-200"
-      case "competency":
-        return "border border-gray-200"
+      case 'genius':
+        return 'bg-green-50 border border-green-200';
+      case 'frustration':
+        return 'bg-red-50 border border-red-200';
+      case 'competency':
+        return 'border border-gray-200';
       default:
-        return ""
+        return '';
     }
-  }
+  };
 
   const getStageResultStyle = (stageGeniuses: string[]) => {
-    const results = stageGeniuses.map((g) => userGeniusResults[g as keyof typeof userGeniusResults])
-    const geniusCount = results.filter((r) => r === "genius").length
-    const frustrationCount = results.filter((r) => r === "frustration").length
+    const results = stageGeniuses.map(
+      (g) => userGeniusResults[g as keyof typeof userGeniusResults],
+    );
+    const geniusCount = results.filter((r) => r === 'genius').length;
+    const frustrationCount = results.filter((r) => r === 'frustration').length;
 
-    if (geniusCount === 2) return "bg-green-50 border border-green-200"
-    if (frustrationCount === 2) return "bg-red-50 border border-red-200"
+    if (geniusCount === 2) return 'bg-green-50 border border-green-200';
+    if (frustrationCount === 2) return 'bg-red-50 border border-red-200';
     if (geniusCount === 1 && frustrationCount === 1)
-      return "bg-gradient-to-r from-green-50 to-red-50 border border-gray-200"
-    if (geniusCount === 1) return "bg-gradient-to-r from-green-50 to-white border border-gray-200"
-    if (frustrationCount === 1) return "bg-gradient-to-r from-red-50 to-white border border-gray-200"
-    return "border border-gray-200"
-  }
+      return 'bg-gradient-to-r from-green-50 to-red-50 border border-gray-200';
+    if (geniusCount === 1) return 'bg-gradient-to-r from-green-50 to-white border border-gray-200';
+    if (frustrationCount === 1)
+      return 'bg-gradient-to-r from-red-50 to-white border border-gray-200';
+    return 'border border-gray-200';
+  };
 
   const getTeamCountsForGenius = (geniusId: string) => {
-    const counts = { genius: 0, competency: 0, frustration: 0 }
+    const counts = { genius: 0, competency: 0, frustration: 0 };
     teamMembers.forEach((member) => {
-      const result = member[geniusId as keyof typeof member]
-      if (result && typeof result === "string") {
-        counts[result as keyof typeof counts]++
+      const result = member[geniusId as keyof typeof member];
+      if (result && typeof result === 'string') {
+        counts[result as keyof typeof counts]++;
       }
-    })
-    return counts
-  }
+    });
+    return counts;
+  };
 
   const getTeamCountsForStage = (stageGeniuses: string[]) => {
-    const counts = { genius: 0, competency: 0, frustration: 0 }
+    const counts = { genius: 0, competency: 0, frustration: 0 };
     stageGeniuses.forEach((geniusId) => {
-      const geniusCounts = getTeamCountsForGenius(geniusId)
-      counts.genius += geniusCounts.genius
-      counts.competency += geniusCounts.competency
-      counts.frustration += geniusCounts.frustration
-    })
-    return counts
-  }
+      const geniusCounts = getTeamCountsForGenius(geniusId);
+      counts.genius += geniusCounts.genius;
+      counts.competency += geniusCounts.competency;
+      counts.frustration += geniusCounts.frustration;
+    });
+    return counts;
+  };
 
   const handleDraftHover = (show: boolean) => {
     if (!draggedTask) {
-      setShowDraftZone(show)
+      setShowDraftZone(show);
     }
-  }
+  };
 
   const handleArchiveHover = (show: boolean) => {
     if (!draggedTask) {
-      setShowArchiveZone(show)
+      setShowArchiveZone(show);
     }
-  }
+  };
 
   return (
     <div className="p-6 relative">
@@ -618,7 +692,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
           className="absolute left-0 top-1/2 -translate-y-1/2 z-30"
           onMouseEnter={() => handleDraftHover(true)}
           onMouseLeave={() => handleDraftHover(false)}
-          onDragOver={(e) => handleDragOverEdge(e, "left")}
+          onDragOver={(e) => handleDragOverEdge(e, 'left')}
           onDragLeave={handleDragLeaveEdge}
         >
           <div className="bg-white/95 backdrop-blur-sm rounded-r-md px-2 py-4 shadow-sm border border-gray-200 min-h-[80px] flex flex-col items-center justify-center">
@@ -630,7 +704,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
               >
                 <Edit3 className="h-4 w-4 mx-auto mb-1" />
                 <span className="text-xs font-medium block mb-2">{getDraftTasks().length}</span>
-                {dragOverEdge === "left" && <div className="text-xs">Drop to Draft</div>}
+                {dragOverEdge === 'left' && <div className="text-xs">Drop to Draft</div>}
               </div>
             ) : (
               <Button
@@ -652,7 +726,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
           className="absolute right-0 top-1/2 -translate-y-1/2 z-30"
           onMouseEnter={() => handleArchiveHover(true)}
           onMouseLeave={() => handleArchiveHover(false)}
-          onDragOver={(e) => handleDragOverEdge(e, "right")}
+          onDragOver={(e) => handleDragOverEdge(e, 'right')}
           onDragLeave={handleDragLeaveEdge}
         >
           <div className="bg-white/95 backdrop-blur-sm rounded-l-md px-2 py-4 shadow-sm border border-gray-200 min-h-[80px] flex flex-col items-center justify-center">
@@ -664,7 +738,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
               >
                 <FileText className="h-4 w-4 mx-auto mb-1" />
                 <span className="text-xs font-medium block mb-2">{getArchiveTasks().length}</span>
-                {dragOverEdge === "right" && <div className="text-xs">Drop to Archive</div>}
+                {dragOverEdge === 'right' && <div className="text-xs">Drop to Archive</div>}
               </div>
             ) : (
               <Button
@@ -714,7 +788,9 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
                   </CardContent>
                 </Card>
               ))}
-              {getDraftTasks().length === 0 && <p className="text-center text-muted-foreground py-8">No draft cards</p>}
+              {getDraftTasks().length === 0 && (
+                <p className="text-center text-muted-foreground py-8">No draft cards</p>
+              )}
             </div>
           </div>
           <div className="flex-1" onClick={() => setIsDraftPanelOpen(false)} />
@@ -745,7 +821,11 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
                   <CardContent className="pt-0">
                     <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => restoreFromArchive(task.id)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => restoreFromArchive(task.id)}
+                      >
                         Restore
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => handleCardClick(task)}>
@@ -767,7 +847,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
         className="absolute left-0 top-1/2 -translate-y-1/2 w-16 h-40 z-20"
         onMouseEnter={() => handleDraftHover(true)}
         onMouseLeave={() => handleDraftHover(false)}
-        onDragOver={(e) => handleDragOverEdge(e, "left")}
+        onDragOver={(e) => handleDragOverEdge(e, 'left')}
         onDragLeave={handleDragLeaveEdge}
       />
 
@@ -775,7 +855,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
         className="absolute right-0 top-1/2 -translate-y-1/2 w-16 h-40 z-20"
         onMouseEnter={() => handleArchiveHover(true)}
         onMouseLeave={() => handleArchiveHover(false)}
-        onDragOver={(e) => handleDragOverEdge(e, "right")}
+        onDragOver={(e) => handleDragOverEdge(e, 'right')}
         onDragLeave={handleDragLeaveEdge}
       />
 
@@ -783,32 +863,34 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
         <div>
           <h2 className="text-2xl font-semibold text-foreground mb-2">Project Overview</h2>
           <p className="text-muted-foreground">
-            {viewMode === "genius" ? "Organize tasks by Working Genius types" : "Organize tasks by Work Stages"}
+            {viewMode === 'genius'
+              ? 'Organize tasks by Working Genius types'
+              : 'Organize tasks by Work Stages'}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center bg-muted rounded-lg p-1">
             <Button
-              variant={viewMode === "genius" ? "default" : "ghost"}
+              variant={viewMode === 'genius' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode("genius")}
+              onClick={() => setViewMode('genius')}
               className={`px-3 py-1 text-xs font-medium transition-all ${
-                viewMode === "genius"
-                  ? "bg-background shadow-sm text-foreground"
-                  : "hover:bg-background/50 text-muted-foreground hover:text-foreground"
+                viewMode === 'genius'
+                  ? 'bg-background shadow-sm text-foreground'
+                  : 'hover:bg-background/50 text-muted-foreground hover:text-foreground'
               }`}
             >
               Genius
             </Button>
             <Button
-              variant={viewMode === "stage" ? "default" : "ghost"}
+              variant={viewMode === 'stage' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode("stage")}
+              onClick={() => setViewMode('stage')}
               className={`px-3 py-1 text-xs font-medium transition-all ${
-                viewMode === "stage"
-                  ? "bg-background shadow-sm text-foreground"
-                  : "hover:bg-background/50 text-muted-foreground hover:text-foreground"
+                viewMode === 'stage'
+                  ? 'bg-background shadow-sm text-foreground'
+                  : 'hover:bg-background/50 text-muted-foreground hover:text-foreground'
               }`}
             >
               Stage
@@ -837,31 +919,35 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
             className="flex items-center gap-2"
           >
             {showCompleted ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            {showCompleted ? "Hide" : "Show"} Completed
+            {showCompleted ? 'Hide' : 'Show'} Completed
           </Button>
         </div>
       </div>
 
       <div ref={resizeRef} className="relative">
-        <div className={`grid gap-4 mb-8 ${viewMode === "genius" ? "grid-cols-6" : "grid-cols-3"}`}>
+        <div className={`grid gap-4 mb-8 ${viewMode === 'genius' ? 'grid-cols-6' : 'grid-cols-3'}`}>
           {displayColumns.map((column) => {
             const columnTasks =
-              viewMode === "genius"
+              viewMode === 'genius'
                 ? tasks.filter((task) => task.column === column.id)
-                : getTasksForStage((column as any).geniuses || [column.id])
+                : getTasksForStage((column as any).geniuses || [column.id]);
 
-            const filteredAndSortedTasks = sortTasks(filterTasks(columnTasks))
+            const filteredAndSortedTasks = sortTasks(filterTasks(columnTasks));
 
             const teamCounts =
-              viewMode === "genius"
+              viewMode === 'genius'
                 ? getTeamCountsForGenius(column.id)
-                : getTeamCountsForStage((column as any).geniuses || [column.id])
+                : getTeamCountsForStage((column as any).geniuses || [column.id]);
 
             return (
-              <div key={column.id} className="space-y-4 flex flex-col" style={{ height: `${kanbanHeight}px` }}>
+              <div
+                key={column.id}
+                className="space-y-4 flex flex-col"
+                style={{ height: `${kanbanHeight}px` }}
+              >
                 <div
                   className={`p-3 rounded-lg ${
-                    viewMode === "genius"
+                    viewMode === 'genius'
                       ? getGeniusResultStyle(column.id)
                       : getStageResultStyle((column as any).geniuses || [column.id])
                   }`}
@@ -912,9 +998,11 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
 
                         <Card
                           className={`cursor-pointer hover:shadow-md transition-all duration-200 ${
-                            task.completed ? "opacity-60 bg-muted/50" : ""
-                          } ${draggedTask?.id === task.id ? "opacity-50 rotate-2 scale-105" : ""} ${
-                            dragOverIndex === index && draggedTask && dragOverColumn === column.id ? "mt-4" : ""
+                            task.completed ? 'opacity-60 bg-muted/50' : ''
+                          } ${draggedTask?.id === task.id ? 'opacity-50 rotate-2 scale-105' : ''} ${
+                            dragOverIndex === index && draggedTask && dragOverColumn === column.id
+                              ? 'mt-4'
+                              : ''
                           }`}
                           onClick={() => handleCardClick(task)}
                           draggable
@@ -923,8 +1011,8 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
                           onDragOver={(e) => handleCardDragOver(e, index)}
                           onDragLeave={handleCardDragLeave}
                           onDrop={(e) => {
-                            e.stopPropagation()
-                            handleDrop(e, column.id, dragOverIndex ?? index)
+                            e.stopPropagation();
+                            handleDrop(e, column.id, dragOverIndex ?? index);
                           }}
                         >
                           <CardHeader className="pb-0">
@@ -933,21 +1021,29 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
                             </CardTitle>
                             <div className="space-y-2">
                               <div className="flex items-center gap-3">
-                                <div className={`w-2 h-2 rounded-full ${getStatusColor(task.status)}`} />
-                                <span className="text-xs text-muted-foreground">{getStatusLabel(task.status)}</span>
+                                <div
+                                  className={`w-2 h-2 rounded-full ${getStatusColor(task.status)}`}
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                  {getStatusLabel(task.status)}
+                                </span>
                               </div>
 
-                              {task.progressEnabled && task.progress !== undefined && task.progress > 0 && (
-                                <div className="mt-5 mb-0">
-                                  <div className="w-full bg-white rounded-full h-1.5 border border-gray-300">
-                                    <div
-                                      className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                                      style={{ width: `${task.progress}%` }}
-                                    />
+                              {task.progressEnabled &&
+                                task.progress !== undefined &&
+                                task.progress > 0 && (
+                                  <div className="mt-5 mb-0">
+                                    <div className="w-full bg-white rounded-full h-1.5 border border-gray-300">
+                                      <div
+                                        className="bg-primary h-1.5 rounded-full transition-all duration-300"
+                                        style={{ width: `${task.progress}%` }}
+                                      />
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {task.progress}% complete
+                                    </div>
                                   </div>
-                                  <div className="text-xs text-muted-foreground mt-1">{task.progress}% complete</div>
-                                </div>
-                              )}
+                                )}
                             </div>
                           </CardHeader>
                           <CardContent className="-mt-2 pt-0">
@@ -957,21 +1053,28 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                   <Avatar className="h-6 w-6">
-                                    <AvatarImage src="/diverse-team-member.png" alt={task.assignee} />
+                                    <AvatarImage
+                                      src="/diverse-team-member.png"
+                                      alt={task.assignee}
+                                    />
                                     <AvatarFallback className="text-xs">
                                       {task.assignee
-                                        .split(" ")
+                                        .split(' ')
                                         .map((n) => n[0])
-                                        .join("")}
+                                        .join('')}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span className="text-xs text-muted-foreground">{task.assignee}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {task.assignee}
+                                  </span>
                                 </div>
 
                                 <div className="flex items-center justify-start gap-1.5 text-xs text-muted-foreground">
                                   <div className="flex items-center gap-0.5">
                                     <Clock className="h-3 w-3" />
-                                    <span className="whitespace-nowrap min-w-0 text-xs">{task.dueDate}</span>
+                                    <span className="whitespace-nowrap min-w-0 text-xs">
+                                      {task.dueDate}
+                                    </span>
                                   </div>
                                   {task.comments > 0 && (
                                     <div className="flex items-center gap-0.5">
@@ -1006,21 +1109,23 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
                       </div>
                     ))}
 
-                    {filteredAndSortedTasks.length === 0 && draggedTask && dragOverColumn === column.id && (
-                      <div
-                        className="h-20 border-2 border-dashed border-primary/50 rounded-lg flex items-center justify-center text-primary/50"
-                        onDragOver={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                        }}
-                        onDrop={(e) => {
-                          e.stopPropagation()
-                          handleDrop(e, column.id, 0)
-                        }}
-                      >
-                        Drop here
-                      </div>
-                    )}
+                    {filteredAndSortedTasks.length === 0 &&
+                      draggedTask &&
+                      dragOverColumn === column.id && (
+                        <div
+                          className="h-20 border-2 border-dashed border-primary/50 rounded-lg flex items-center justify-center text-primary/50"
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onDrop={(e) => {
+                            e.stopPropagation();
+                            handleDrop(e, column.id, 0);
+                          }}
+                        >
+                          Drop here
+                        </div>
+                      )}
                   </div>
                 </div>
 
@@ -1028,37 +1133,43 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
                   {teamCounts.genius > 0 && (
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full bg-green-300" />
-                      <span className="text-xs font-medium text-green-600">{teamCounts.genius}</span>
+                      <span className="text-xs font-medium text-green-600">
+                        {teamCounts.genius}
+                      </span>
                     </div>
                   )}
                   {teamCounts.competency > 0 && (
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full bg-gray-300" />
-                      <span className="text-xs font-medium text-gray-500">{teamCounts.competency}</span>
+                      <span className="text-xs font-medium text-gray-500">
+                        {teamCounts.competency}
+                      </span>
                     </div>
                   )}
                   {teamCounts.frustration > 0 && (
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full bg-red-300" />
-                      <span className="text-xs font-medium text-red-600">{teamCounts.frustration}</span>
+                      <span className="text-xs font-medium text-red-600">
+                        {teamCounts.frustration}
+                      </span>
                     </div>
                   )}
                 </div>
               </div>
-            )
+            );
           })}
         </div>
 
         <div
           className={`absolute bottom-0 left-0 right-0 h-2 cursor-row-resize group hover:bg-primary/20 transition-colors ${
-            isResizing ? "bg-primary/30" : ""
+            isResizing ? 'bg-primary/30' : ''
           }`}
           onMouseDown={handleResizeStart}
         >
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center">
             <GripHorizontal
               className={`h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors ${
-                isResizing ? "text-primary" : ""
+                isResizing ? 'text-primary' : ''
               }`}
             />
           </div>
@@ -1072,8 +1183,12 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
         onSave={handleSaveTask}
         onDuplicate={handleDuplicateTask}
         onDelete={handleDeleteTask}
-        isNewCard={selectedTask?.title === "New Task"}
+        isNewCard={selectedTask?.title === 'New Task'}
+        statuses={statuses}
+        priorities={priorities}
+        boardsData={boardsData}
+        employees={employees}
       />
     </div>
-  )
+  );
 }

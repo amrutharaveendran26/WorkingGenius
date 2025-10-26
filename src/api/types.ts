@@ -75,6 +75,16 @@ export interface ProjectCategory {
   id: number;
   name: string;
   description?: string;
+
+}
+
+export interface SubTask {
+  id: any;
+  title: string;
+  assignedTo: number;
+  assignee?: string;
+  dueDate: string;
+  completed: boolean;
 }
 
 export interface Task {
@@ -93,17 +103,26 @@ export interface Task {
   progressEnabled: boolean;
   boards: string[];
   owners: string[];
-  subtasks: {
-    id: number;
-    title: string;
-    assignee: string;
-    dueDate: string;
-    completed: boolean;
-  }[];
+  subtasks: SubTask[];
+  commentsArray?: Comment[];
 }
 
 export interface ApiResponse<T = any> {
   success: boolean;
   message: string;
   data?: T;
+}
+
+export interface CommentPayload {
+  projectId: number;
+  content: string;
+  userName?: string;
+}
+
+export interface Comment {
+  id: number;
+  projectId: number;
+  content: string;
+  userName: string;
+  createdAt?: string;
 }

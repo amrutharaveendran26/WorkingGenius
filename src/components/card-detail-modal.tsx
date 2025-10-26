@@ -36,15 +36,9 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Board, Employee, ProjectPriority, ProjectStatus, Task } from '@/api/types';
-
-interface SubTask {
-  id: any;
-  title: string;
-  owner: string;
-  dueDate: string;
-  completed: boolean;
-}
+import { Board, Employee, ProjectPriority, ProjectStatus, SubTask, Task } from '@/api/types';
+import toast from 'react-hot-toast';
+import { addComment, deleteProject, deleteTask, getCommentsByProject } from '@/api/project.api';
 
 interface CardDetailModalProps {
   task: Task | null;
@@ -58,6 +52,7 @@ interface CardDetailModalProps {
   priorities: ProjectPriority[];
   boardsData: Board[];
   employees: Employee[];
+  fetchAllProjects: () => Promise<void>;
 }
 
 export function CardDetailModal({
@@ -72,6 +67,7 @@ export function CardDetailModal({
   priorities,
   boardsData,
   employees,
+  fetchAllProjects,
 }: CardDetailModalProps) {
   const [editedTask, setEditedTask] = useState<Task | null>(null);
   const [newComment, setNewComment] = useState('');
@@ -115,6 +111,19 @@ export function CardDetailModal({
   }, [task, isNewCard]);
 
   useEffect(() => {
+    fetchComments();
+  }, [task]);
+
+  const fetchComments = async () => {
+    if (task?.id) {
+      const res = await getCommentsByProject(task.id);
+      if (res.success) {
+        setEditedTask((prev) => (prev ? { ...prev, commentsArray: res.data } : prev));
+      }
+    }
+  };
+
+  useEffect(() => {
     if (editedTask && task) {
       const timeoutId = setTimeout(() => {
         onSave(editedTask);
@@ -145,13 +154,25 @@ export function CardDetailModal({
     return `${year}-${month}-${day}`;
   };
 
-  const handleDelete = () => {
-    if (
-      editedTask &&
-      window.confirm('Are you sure you want to delete this task? This action cannot be undone.')
-    ) {
-      onDelete(editedTask.id);
-      onClose();
+  const handleDeleteProject = async (projectId: number) => {
+    if (!projectId) return;
+
+    const confirmDelete = window.confirm('Are you sure you want to delete this project?');
+    if (!confirmDelete) return;
+
+    try {
+      const response = await deleteProject(projectId);
+
+      if (response.success) {
+        toast.success('Project deleted successfully!');
+        fetchAllProjects();
+        onClose();
+      } else {
+        toast.error(response.message || 'Failed to delete project.');
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast.error('Something went wrong while deleting the project.');
     }
   };
 
@@ -199,19 +220,28 @@ export function CardDetailModal({
 
   const addSubtask = () => {
     if (newSubtaskTitle && newSubtaskOwner && editedTask) {
+      const foundEmployee = employees.find((e) => e.name === newSubtaskOwner);
+
       const newSubtask: SubTask = {
-        id: crypto.randomUUID ? crypto.randomUUID() : Date.now(),
-        title: newSubtaskTitle,
-        owner: newSubtaskOwner,
-        dueDate: newSubtaskDate ? format(newSubtaskDate, 'MMM dd') : 'No date',
+        id: 0,
+        title: newSubtaskTitle.trim(),
+        assignedTo: foundEmployee?.id ?? employees[0]?.id ?? 1,
+        assignee: foundEmployee?.name ?? newSubtaskOwner,
+        dueDate: newSubtaskDate
+          ? format(newSubtaskDate, 'yyyy-MM-dd')
+          : new Date().toISOString().split('T')[0],
         completed: false,
       };
-      const updatedTask = {
+
+      const updatedTask: Task = {
         ...editedTask,
         subtasks: [...(editedTask.subtasks || []), newSubtask],
       };
-      // setEditedTask(updatedTask);
-      // onSave(updatedTask);
+
+      setEditedTask(updatedTask); // updates modal UI
+      onSave(updatedTask); // pushes change to parent immediately
+
+      // reset subtask input
       setNewSubtaskTitle('');
       setNewSubtaskOwner('');
       setNewSubtaskDate(undefined);
@@ -232,14 +262,58 @@ export function CardDetailModal({
     }
   };
 
-  const deleteSubtask = (subtaskId: number) => {
-    if (editedTask) {
-      const updatedTask = {
-        ...editedTask,
-        subtasks: editedTask.subtasks?.filter((subtask) => subtask.id !== subtaskId) || [],
-      };
-      setEditedTask(updatedTask);
-      onSave(updatedTask);
+  const deleteSubtask = async (subtaskId: number) => {
+    if (!editedTask) return;
+
+    try {
+      const response = await deleteTask(subtaskId);
+
+      if (response.success) {
+        toast.success('Subtask deleted successfully');
+
+        const updatedTask = {
+          ...editedTask,
+          subtasks: editedTask.subtasks?.filter((subtask) => subtask.id !== subtaskId) || [],
+        };
+
+        setEditedTask(updatedTask);
+        onSave(updatedTask);
+      } else {
+        toast.error(response.message || 'Failed to delete subtask');
+      }
+    } catch (error) {
+      console.error('Error deleting subtask:', error);
+      toast.error('Something went wrong while deleting subtask');
+    }
+  };
+
+  const addCommentHandler = async () => {
+    if (!newComment.trim() || !editedTask) return;
+
+    try {
+      const response = await addComment({
+        projectId: editedTask.id,
+        content: newComment,
+        userName: 'You',
+      });
+
+      if (response.success && response.data) {
+        toast.success('Comment added successfully');
+
+        const updatedComments = [...(editedTask.commentsArray || []), response.data];
+
+        setEditedTask({
+          ...editedTask,
+          commentsArray: updatedComments,
+        });
+
+        setNewComment('');
+      } else {
+        toast.error(response.message || 'Failed to add comment');
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast.error('Something went wrong while adding comment');
     }
   };
 
@@ -371,7 +445,7 @@ export function CardDetailModal({
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={handleDelete}
+                  onClick={() => handleDeleteProject(editedTask?.id ?? 0)}
                   className="ml-2 bg-red-600 hover:bg-red-700 text-white"
                   disabled={isLocked}
                 >
@@ -604,19 +678,29 @@ export function CardDetailModal({
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-48 p-2" align="center">
-                          <SelectContent>
-                            {employees && employees.length > 0 ? (
-                              employees.map((emp) => (
-                                <SelectItem key={emp.id} value={emp.name}>
-                                  {emp.name}
-                                </SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="You">You</SelectItem>
-                            )}
-                          </SelectContent>
+                          <Select
+                            value={newSubtaskOwner}
+                            onValueChange={setNewSubtaskOwner}
+                            disabled={isLocked}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select owner" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {employees && employees.length > 0 ? (
+                                employees.map((emp) => (
+                                  <SelectItem key={emp.id} value={emp.name}>
+                                    {emp.name}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="You">You</SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
                         </PopoverContent>
                       </Popover>
+
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
@@ -632,9 +716,20 @@ export function CardDetailModal({
                           <Calendar
                             mode="single"
                             selected={newSubtaskDate}
-                            onSelect={setNewSubtaskDate}
-                            initialFocus
-                            disabled={isLocked}
+                            onSelect={(date) => {
+                              if (!date) return;
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              const selected = new Date(date);
+                              selected.setHours(0, 0, 0, 0);
+
+                              if (selected < today) {
+                                toast.error('Subtask due date cannot be in the past');
+                                return;
+                              }
+                              setNewSubtaskDate(date);
+                            }}
+                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                           />
                         </PopoverContent>
                       </Popover>
@@ -665,66 +760,41 @@ export function CardDetailModal({
               </div>
 
               {/* Comments */}
-              {/* <div>
+              <div>
                 <h3 className="text-sm font-medium mb-3">
                   Comments ({editedTask.commentsArray?.length || 0})
                 </h3>
+
                 <div className="space-y-3">
-                  {(() => {
-                    const comments = editedTask.commentsArray || [];
-                    const shouldCollapse = comments.length > 3;
-                    const displayComments =
-                      shouldCollapse && !commentsExpanded
-                        ? [comments[comments.length - 1]] // Show only the most recent comment
-                        : comments;
+                  {editedTask.commentsArray && editedTask.commentsArray.length > 0 ? (
+                    editedTask.commentsArray.map((comment) => (
+                      <div key={comment.id} className="flex gap-3 items-start">
+                        <Avatar className="h-8 w-8">
+                          {/* ✅ Dummy avatar */}
+                          <AvatarImage src="/diverse-team-member.png" alt="avatar" />
+                          <AvatarFallback>
+                            {comment.userName
+                              .split(' ')
+                              .map((n) => n[0])
+                              .join('')}
+                          </AvatarFallback>
+                        </Avatar>
 
-                    return (
-                      <>
-                        {displayComments.map((comment) => (
-                          <div key={comment.id} className="flex gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={comment.avatar || '/placeholder.svg'} />
-                              <AvatarFallback>
-                                {comment.author
-                                  .split(' ')
-                                  .map((n) => n[0])
-                                  .join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium">{comment.author}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {comment.timestamp}
-                                </span>
-                              </div>
-                              <p className="text-sm text-muted-foreground">{comment.content}</p>
-                            </div>
-                          </div>
-                        ))}
+                        <div className="flex-1 bg-gray-50 border rounded-lg p-2">
+                          <p className="text-sm font-medium">{comment.userName}</p>
+                          <p className="text-sm text-gray-700">{comment.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">No comments yet</p>
+                  )}
 
-                        {shouldCollapse && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setCommentsExpanded(!commentsExpanded)}
-                            className="w-full text-muted-foreground hover:text-foreground"
-                          >
-                            {commentsExpanded ? (
-                              <>Show Less</>
-                            ) : (
-                              <>Show {comments.length - 1} More Comments</>
-                            )}
-                          </Button>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  <div className="flex gap-3">
+                  {/* Add new comment */}
+                  <div className="flex gap-3 mt-4">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src="/diverse-team-member.png" />
-                      <AvatarFallback>SC</AvatarFallback>
+                      <AvatarFallback>YO</AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
                       <Textarea
@@ -738,7 +808,7 @@ export function CardDetailModal({
                         size="sm"
                         className="mt-2"
                         disabled={!newComment.trim() || isLocked}
-                        onClick={addComment}
+                        onClick={addCommentHandler}
                       >
                         <Send className="h-4 w-4 mr-2" />
                         Comment
@@ -746,10 +816,10 @@ export function CardDetailModal({
                     </div>
                   </div>
                 </div>
-              </div> */}
+              </div>
 
               {/* Attachments */}
-              <div>
+              {/* <div>
                 <h3 className="text-sm font-medium mb-3">Attachments ({task.attachments})</h3>
                 <div className="space-y-2">
                   <div className="flex items-center gap-3 p-3 border rounded-md">
@@ -767,7 +837,7 @@ export function CardDetailModal({
                     Add Attachment
                   </Button>
                 </div>
-              </div>
+              </div> */}
 
               {/* Custom Fields
               <div>
@@ -890,13 +960,24 @@ export function CardDetailModal({
                         mode="single"
                         selected={selectedDate}
                         onSelect={(date) => {
-                          setSelectedDate(date || undefined);
-                          if (date && editedTask) {
+                          if (!date) return;
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const selected = new Date(date);
+                          selected.setHours(0, 0, 0, 0);
+
+                          if (selected < today) {
+                            toast.error('You cannot select a past date for due date');
+                            return;
+                          }
+
+                          setSelectedDate(date);
+                          if (editedTask) {
                             const formattedDate = formatDate(date);
                             setEditedTask({ ...editedTask, dueDate: formattedDate });
                           }
                         }}
-                        disabled={isLocked}
+                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                       />
                     </PopoverContent>
                   </Popover>

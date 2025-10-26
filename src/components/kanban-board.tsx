@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { CardDetailModal } from './card-detail-modal';
-import { createProject, getAllProjects, updateProject } from '@/api/project.api';
+import { createProject, deleteProject, getAllProjects, updateProject } from '@/api/project.api';
 import {
   ApiResponse,
   Board,
@@ -217,14 +217,9 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
       title: proj.title ?? `Untitled Project ${index + 1}`,
       description: proj.description ?? 'No description available.',
       assignee: proj.owners?.[0]?.name || 'Unassigned',
-      dueDate: proj.dueDate
-        ? new Date(proj.dueDate).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-          })
-        : 'Dec 31',
-      comments: proj.comments ?? 1,
-      attachments: proj.attachments ?? 1,
+      dueDate: proj.dueDate ? new Date(proj.dueDate).toISOString().split('T')[0] : '2025-12-31',
+      comments: proj.comments ?? 0,
+      attachments: proj.attachments ?? 0,
       priority: proj.priority ?? 'medium',
       status: proj.status ?? 'on-track',
       column: proj.category?.toLowerCase() || 'uncategorized',
@@ -232,30 +227,54 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
       progress: proj.progress ?? 70,
       progressEnabled: proj.progressEnabled ?? true,
 
-      // 🧠 Fix here — convert project owners and boards to string arrays
-      owners: proj.owners?.map((o: any) => o.name) ?? [], // <-- fixed
-      boards: proj.boards?.map((b: any) => b.name) ?? [], // <-- fixed
+      owners: proj.owners?.map((o: any) => o.name) ?? [],
+      boards: proj.boards?.map((b: any) => b.name) ?? [],
 
-      // 🧩 subtasks should match your interface shape
       subtasks:
         proj.subtasks?.map((sub: any, subIndex: number) => ({
           id: sub.id ?? subIndex + 1,
           title: sub.title ?? 'Untitled subtask',
           assignee: sub.assignee ?? 'Unassigned',
-          dueDate: sub.dueDate
-            ? new Date(sub.dueDate).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })
-            : 'Dec 31',
+          dueDate: proj.dueDate ? new Date(proj.dueDate).toISOString().split('T')[0] : '2025-12-31',
+
           completed: sub.completed ?? false,
         })) ?? [],
     }));
 
   const handleSaveProject = async (task: Task) => {
     try {
-      console.log("inside try ")
-      const isNew = !task.id || task.title === 'New Task';
+      console.log('inside try ');
+      const isNew = !task.id || task.title === 'New Task' || task.id === 0;
+
+      if (!task.title?.trim()) {
+        toast.error('Please enter a project name');
+        return;
+      }
+
+      if (!task.description?.trim()) {
+        toast.error('Please enter a description');
+        return;
+      }
+
+      if (!task.status) {
+        toast.error('Please select a status');
+        return;
+      }
+
+      if (!task.priority) {
+        toast.error('Please select a priority');
+        return;
+      }
+
+      if (!task.boards || task.boards.length === 0) {
+        toast.error('Please select at least one board');
+        return;
+      }
+
+      if (!task.owners || task.owners.length === 0) {
+        toast.error('Please assign at least one owner');
+        return;
+      }
 
       const payload = {
         title: task.title || 'Untitled Project',
@@ -273,15 +292,22 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
           const found = boardsData.find((board) => board.name === b);
           return found?.id ?? boardsData[0]?.id ?? 1;
         }),
-        dueDate: task.dueDate || '',
-        tasks: (task.subtasks || []).map((t) => ({
-          title: t.title,
-          dueDate: t.dueDate || new Date().toISOString().split('T')[0],
-          assignedTo: employees.find((e) => e.name === t.assignee)?.id ?? employees[0]?.id ?? 1,
-        })),
+        dueDate: task.dueDate
+          ? new Date(task.dueDate).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0],
+        tasks: (task.subtasks || []).map((t) => {
+          const foundEmp = employees.find((e) => e.name === t.assignee || e.id === t.assignedTo);
+          return {
+            title: t.title,
+            dueDate: t.dueDate
+              ? new Date(t.dueDate).toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0],
+            assignedTo: foundEmp?.id ?? employees[0]?.id ?? 1,
+          };
+        }),
       };
 
-      console.log('🟡 Sending Payload to updateProject:', JSON.stringify(payload, null, 2));
+      console.log('Sending Payload to updateProject:', JSON.stringify(payload, null, 2));
 
       const response: ApiResponse = isNew
         ? await createProject(payload)
@@ -414,9 +440,9 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
     }
 
     const newTask: Task = {
-      id: Math.max(0, ...tasks.map((t) => t.id)) + 1,
+      id: 0,
       title: 'New Task',
-      description: 'Add description...',
+      description: '',
       assignee: 'You',
       dueDate: 'Dec 31',
       comments: 0,
@@ -429,7 +455,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
       progressEnabled: true,
       boards: selectedBoard === 'All Projects' ? ['Marketing Team Meetings'] : [selectedBoard],
       subtasks: [],
-      owners:[]
+      owners: [],
     };
 
     setTasks([...tasks, newTask]);
@@ -1188,6 +1214,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
         priorities={priorities}
         boardsData={boardsData}
         employees={employees}
+        fetchAllProjects={fetchAllProjects}
       />
     </div>
   );

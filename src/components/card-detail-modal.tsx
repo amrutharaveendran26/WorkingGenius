@@ -288,7 +288,15 @@ export function CardDetailModal({
   };
 
   const addCommentHandler = async () => {
-    if (!newComment.trim() || !editedTask) return;
+    if (!editedTask?.id || editedTask.id === 0) {
+      toast.error('Please save the project before adding comments');
+      return;
+    }
+
+    if (!newComment.trim()) {
+      toast.error('Comment cannot be empty');
+      return;
+    }
 
     try {
       const response = await addComment({
@@ -301,7 +309,6 @@ export function CardDetailModal({
         toast.success('Comment added successfully');
 
         const updatedComments = [...(editedTask.commentsArray || []), response.data];
-
         setEditedTask({
           ...editedTask,
           commentsArray: updatedComments,
@@ -770,7 +777,6 @@ export function CardDetailModal({
                     editedTask.commentsArray.map((comment) => (
                       <div key={comment.id} className="flex gap-3 items-start">
                         <Avatar className="h-8 w-8">
-                          {/* ✅ Dummy avatar */}
                           <AvatarImage src="/diverse-team-member.png" alt="avatar" />
                           <AvatarFallback>
                             {comment.userName
@@ -790,7 +796,6 @@ export function CardDetailModal({
                     <p className="text-sm text-gray-500 italic">No comments yet</p>
                   )}
 
-                  {/* Add new comment */}
                   <div className="flex gap-3 mt-4">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src="/diverse-team-member.png" />
@@ -807,7 +812,9 @@ export function CardDetailModal({
                       <Button
                         size="sm"
                         className="mt-2"
-                        disabled={!newComment.trim() || isLocked}
+                        disabled={
+                          !newComment.trim() || isLocked || !editedTask?.id || editedTask.id === 0
+                        }
                         onClick={addCommentHandler}
                       >
                         <Send className="h-4 w-4 mr-2" />

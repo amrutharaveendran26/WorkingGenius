@@ -321,7 +321,7 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
         toast.error(response.message || 'Failed to save project');
       }
     } catch (error) {
-      console.error('❌ Error saving project:', error);
+      console.error(' Error saving project:', error);
       toast.error('Something went wrong while saving project');
     }
   };

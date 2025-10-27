@@ -238,10 +238,8 @@ export function CardDetailModal({
         subtasks: [...(editedTask.subtasks || []), newSubtask],
       };
 
-      setEditedTask(updatedTask); // updates modal UI
-      onSave(updatedTask); // pushes change to parent immediately
-
-      // reset subtask input
+      setEditedTask(updatedTask); 
+      onSave(updatedTask); 
       setNewSubtaskTitle('');
       setNewSubtaskOwner('');
       setNewSubtaskDate(undefined);
@@ -912,13 +910,19 @@ export function CardDetailModal({
                           <div
                             className={`w-2 h-2 rounded-full ${getStatusColor(editedTask.status)}`}
                           />
-                          <SelectValue />
+                          <SelectValue placeholder="Select Status" />
                         </div>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="on-track">On Track</SelectItem>
-                        <SelectItem value="at-risk">At Risk</SelectItem>
-                        <SelectItem value="blocked">Blocked</SelectItem>
+                        {statuses && statuses.length > 0 ? (
+                          statuses.map((status) => (
+                            <SelectItem key={status.id} value={status.name}>
+                              {status.name.charAt(0).toUpperCase() + status.name.slice(1)}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none">No Status Found</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

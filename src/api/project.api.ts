@@ -2,8 +2,10 @@ import apiClient from './apiClient';
 import { commentEndpoints, projectEndpoints, taskEndpoints } from './endpoints';
 import { ApiResponse, Comment, CommentPayload, GetAllProjectsResponse } from './types';
 
-export const getAllProjects = async (): Promise<GetAllProjectsResponse> => {
-  const response = await apiClient.get<GetAllProjectsResponse>(projectEndpoints.getAll);
+export const getAllProjects = async (page = 1, limit = 5): Promise<GetAllProjectsResponse> => {
+  const response = await apiClient.get<GetAllProjectsResponse>(
+    `${projectEndpoints.getAll}?page=${page}&limit=${limit}`,
+  );
   return response.data;
 };
 

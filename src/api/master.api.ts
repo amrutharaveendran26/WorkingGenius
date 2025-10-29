@@ -1,8 +1,8 @@
 import apiClient from './apiClient';
 import { masterEndpoints } from './endpoints';
-import { MasterResponse } from './types';
+import { AllMasterData, MasterResponse } from './types';
 
-export const fetchMasterData = async <T>(type: string): Promise<MasterResponse<T>> => {
-  const response = await apiClient.get<MasterResponse<T>>(masterEndpoints.getMasterData(type));
+export const fetchMasterData = async (): Promise<MasterResponse> => {
+  const response = await apiClient.get<MasterResponse>(masterEndpoints.getMasterData);
   return response.data;
 };

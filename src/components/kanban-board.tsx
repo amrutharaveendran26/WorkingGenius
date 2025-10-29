@@ -146,10 +146,15 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
   const [priorities, setPriorities] = useState<ProjectPriority[]>([]);
   const [categories, setCategories] = useState<ProjectCategory[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(5);
+  const [total, setTotal] = useState(0);
+  const hasFetched = useRef(false);
 
   useEffect(() => {
-    fetchAllProjects();
-    fetchAllMasterData();
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -157,6 +162,18 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
       setTasks(mapProjectsToTasks(projects));
     }
   }, [projects]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([fetchAllMasterData(), fetchAllProjects(1, 5)]);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Failed to load initial data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const workingGeniusTypes = categories.map((cat, index) => ({
     id: cat.name.toLowerCase(),
@@ -167,13 +184,12 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
     ],
   }));
 
-  const fetchAllProjects = async () => {
+  const fetchAllProjects = async (pageNum = page, limitNum = limit) => {
     try {
       setLoading(true);
-      setError(null);
-      const resp = await getAllProjects();
-      const fetched = resp?.projects ?? [];
-      setProjects(fetched);
+      const resp = await getAllProjects(pageNum, limitNum);
+      setProjects(resp.projects ?? []);
+      setTotal(resp.total ?? 0);
     } catch (err: any) {
       console.error('fetchProjects error:', err);
       setError(err?.message ?? 'Failed to fetch projects');
@@ -185,27 +201,18 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
   const fetchAllMasterData = async () => {
     try {
       setLoading(true);
-      setError(null);
-
-      const [teamsRes, employeesRes, boardsRes, statusRes, priorityRes, categoryRes] =
-        await Promise.all([
-          fetchMasterData<Team>('teams'),
-          fetchMasterData<Employee>('employees'),
-          fetchMasterData<Board>('boards'),
-          fetchMasterData<ProjectStatus>('status'),
-          fetchMasterData<ProjectPriority>('priority'),
-          fetchMasterData<ProjectCategory>('category'),
-        ]);
-
-      setTeams(teamsRes.data);
-      setEmployees(employeesRes.data);
-      setBoardsData(boardsRes.data);
-      setStatuses(statusRes.data);
-      setPriorities(priorityRes.data);
-      setCategories(categoryRes.data);
-    } catch (err: any) {
-      console.error('Error fetching master data:', err);
-      setError(err?.message ?? 'Failed to fetch master data');
+      const res = await fetchMasterData();
+      if (res.success) {
+        const { teams, employees, boards, statuses, priorities, categories } = res.data;
+        setTeams(teams);
+        setEmployees(employees);
+        setBoardsData(boards);
+        setStatuses(statuses);
+        setPriorities(priorities);
+        setCategories(categories);
+      }
+    } catch (err) {
+      console.error('Error fetching all master data:', err);
     } finally {
       setLoading(false);
     }
@@ -406,6 +413,10 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
         return 'At Risk';
       case 'blocked':
         return 'Blocked';
+      case 'completed':
+        return 'Completed';
+      case 'on-hold':
+        return 'On Hold';
       default:
         return 'Unknown';
     }
@@ -1185,6 +1196,38 @@ export function KanbanBoard({ selectedBoard }: KanbanBoardProps) {
             );
           })}
         </div>
+
+        {!loading && total > 0 && (
+          <div className="flex justify-between items-center mt-2 mb-10">
+            <Button
+              disabled={page === 1}
+              size="sm"
+              onClick={() => {
+                const newPage = page - 1;
+                setPage(newPage);
+                fetchAllProjects(newPage, limit);
+              }}
+            >
+              Previous
+            </Button>
+
+            <span className="text-sm text-gray-500">
+              Page {page} of {Math.ceil(total / limit)}
+            </span>
+
+            <Button
+              disabled={page * limit >= total}
+              size="sm"
+              onClick={() => {
+                const newPage = page + 1;
+                setPage(newPage);
+                fetchAllProjects(newPage, limit);
+              }}
+            >
+              Next
+            </Button>
+          </div>
+        )}
 
         <div
           className={`absolute bottom-0 left-0 right-0 h-2 cursor-row-resize group hover:bg-primary/20 transition-colors ${

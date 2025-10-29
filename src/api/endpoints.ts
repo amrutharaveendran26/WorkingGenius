@@ -12,8 +12,9 @@ export const taskEndpoints = {
 };
 
 export const masterEndpoints = {
-  getMasterData: (type: string) => `/master?type=${type}`,
+  getMasterData: '/master/all',
 };
+
 
 export const commentEndpoints = {
   addComment: '/comments/project',

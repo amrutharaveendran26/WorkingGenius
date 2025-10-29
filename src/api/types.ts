@@ -31,14 +31,24 @@ export interface Project {
 export interface GetAllProjectsResponse {
   success: boolean;
   message: string;
+  page?: number;
+  limit?: number;
+  total?: number;
   projects: Project[];
 }
 
-export interface MasterResponse<T> {
+export interface AllMasterData {
+  teams: any[];
+  employees: any[];
+  boards: any[];
+  statuses: any[];
+  priorities: any[];
+  categories: any[];
+}
+
+export interface MasterResponse {
   success: boolean;
-  type: string;
-  count: number;
-  data: T[];
+  data: AllMasterData;
 }
 
 export interface Team {
@@ -75,7 +85,6 @@ export interface ProjectCategory {
   id: number;
   name: string;
   description?: string;
-
 }
 
 export interface SubTask {
